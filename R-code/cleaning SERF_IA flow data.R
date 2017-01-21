@@ -61,10 +61,8 @@ loss %>%
 
 # see when conscutive round times are the same (not different)
 loss %>% 
-  select(roundtime) %>% 
-  mutate(dif = c(1800, diff(roundtime))) %>%
-  #select(dif) %>% unique() %>% arrange(dif)
-  filter(dif == 0)
+  mutate(temp = c(1800, diff(roundtime))) %>%
+  filter(temp == 0)
 
 # look at the data
 loss[rep(which(diff(loss$roundtime) == 0), each =3) + (-1:1), ]
@@ -73,12 +71,10 @@ loss[rep(which(diff(loss$roundtime) == 0), each =3) + (-1:1), ]
 # get rid of the second duplicated value (there are 18 of them)
 loss[-(which(diff(loss$roundtime)==0)+1), ] -> loss
 
-save(loss, file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss.Rda")
-#load(file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss.Rda")
-
 
 loss %>% 
   arrange(plot, roundtime) %>%
+  group_by(plot) %>%
   mutate(timediff = c(30, diff(roundtime))) -> loss
 
 # find measurement frequency 
@@ -124,64 +120,86 @@ loss$diff <- NULL
 loss %>% 
   gather(variable, value, drainage_mm:n_loss) %>% 
   unite(temp, plot, variable, sep = " ") %>%
+  select(-(month:time)) %>%
   spread(temp, value) -> serf_loss
 
+save(loss, file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss.Rda")
+#load(file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss.Rda")
+
+
+save(serf_loss, file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss_wide.Rda")
+
+write.csv(loss, 
+          file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/SERF_Flow_n_NO3.csv",
+          quote = FALSE,
+          row.names = FALSE)
+
+write.csv(serf_loss, 
+          file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/SERF_Flow_n_NO3_wide.csv",
+          quote = FALSE,
+          row.names = FALSE)
+
+
+# check that annual NO3-N loss are accurate
 serf_loss %>% 
   group_by(year) %>% 
   summarize_at(vars(matches("n_loss")), sum, na.rm = TRUE)
 
 
+# FILL IN the NAs =====
+# shows how you can change size of the gap
+serf_loss %>% 
+  group_by(year) %>%
+  mutate(`plot2 n_loss NEW` = na.approx(`plot2 n_loss`, roundtime, na.rm = F, maxgap = 1)) %>%
+#serf_loss %>% 
+  select(roundtime, `plot2 drainage_mm`, `plot2 n_loss`, `plot2 n_loss NEW`) %>% 
+  filter(roundtime > "2011-01-01 21:00") %>%
+  head(16)
 
 
 
+# # interpolate if gap is <= 10
+
+serf_loss %>%
+  group_by(year) %>%
+
+  mutate(plot1_n_loss = na.approx(`plot1 n_loss`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot2_n_loss = na.approx(`plot2 n_loss`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot3_n_loss = na.approx(`plot3 n_loss`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot4_n_loss = na.approx(`plot4 n_loss`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot5_n_loss = na.approx(`plot5 n_loss`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot6_n_loss = na.approx(`plot6 n_loss`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+
+  mutate(plot1_flow = na.approx(`plot1 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot2_flow = na.approx(`plot2 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot3_flow = na.approx(`plot3 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot4_flow = na.approx(`plot4 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot5_flow = na.approx(`plot5 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+  mutate(plot6_flow = na.approx(`plot6 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 10)) %>%
+
+  # select(roundtime, year,
+  #        plot2_flow, plot2_n_loss,
+  #        plot3_flow, plot3_n_loss,
+  #        plot4_flow, plot4_n_loss,
+  #        plot5_flow, plot5_n_loss,
+  #        plot6_flow, plot6_n_loss) %>%
+
+  ungroup()-> serf_loss_FILLED
+
+serf_loss_FILLED %>%
+  group_by(year) %>%
+  summarize_at(vars(matches("n_loss")), sum, na.rm = TRUE) %>% 
+  select(contains("plot2"))
 
 
+serf_loss_FILLED %>%
+  group_by(year) %>%
+  summarize_at(vars(matches("_n_loss")), sum, na.rm = T)
 
+save(serf_loss_FILLED, 
+     file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss_wide_FILLED.Rda")
 
-
-
-
-
-
-
-
-
-
-
-# # interpolate if gap is 3
-
-serf_loss %>% filter(year == 2011) -> tempo
-na.approx(tempo$`plot2 n_loss`, tempo$roundtime, na.rm = FALSE, maxgap = 1) %>% sum(na.rm = T)
-
-
-## DOES NOT WORK
-# serf_loss %>%
-#   group_by(year) %>%
-# 
-#   mutate(plot2_n_loss = na.approx(`plot2 n_loss`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot3_n_loss = na.approx(`plot3 n_loss`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot4_n_loss = na.approx(`plot4 n_loss`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot5_n_loss = na.approx(`plot5 n_loss`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot6_n_loss = na.approx(`plot6 n_loss`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-# 
-#   mutate(plot2_flow = na.approx(`plot2 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot3_flow = na.approx(`plot3 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot4_flow = na.approx(`plot4 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot5_flow = na.approx(`plot5 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-#   mutate(plot6_flow = na.approx(`plot6 drainage_mm`, roundtime, na.rm = FALSE, maxgap = 3)) %>%
-# 
-#   select(roundtime, year,
-#          plot2_flow, plot2_n_loss,
-#          plot3_flow, plot3_n_loss,
-#          plot4_flow, plot4_n_loss,
-#          plot5_flow, plot5_n_loss,
-#          plot6_flow, plot6_n_loss) %>%
-# 
-#   ungroup()-> a
-# 
-# a %>%
-#   group_by(year) %>%
-#   summarize_at(vars(matches("n_loss")), sum, na.rm = TRUE)
-## DOES NOT WORK
-
-
+write.csv(serf_loss_FILLED, 
+          file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/SERF_Flow_n_NO3_wide_FILLED.csv",
+          quote = FALSE,
+          row.names = FALSE)
