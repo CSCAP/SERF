@@ -28,6 +28,10 @@ bind_rows(p1, p2, p3, p4, p5, p6) %>%
   mutate(Time = format.Date(Time, "%H:%M")) %>% 
   mutate(timestamp = parse_date_time(paste(paste(Year, Month, Day, sep = "-"), Time), "ymd HM")) -> loss
 
+save(loss, 
+     file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/loss.Rda")
+load(file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/loss.Rda")
+
 
 # find non-consequtive dates
 loss %>%   mutate(diff = c(1800, diff(timestamp))/60) -> loss
@@ -116,6 +120,7 @@ loss$diff <- NULL
 
 # TRANSFORM dataframe ========================================
 loss %>%
+  select(-c(`Incremental drainage, ft^3`, `Incremental drainage, in`, `Nitrate loss, lb/ac`)) %>%
   select(-c(Month, Day, Time, timestamp, t, timediff)) -> loss
 
 names(loss) <- c("year", "no3_con", "no3_int", "flow_mm", "no3_loss", "plot", "date")
@@ -124,6 +129,8 @@ loss %>%
   select(plot, year, date, no3_con, no3_int, flow_mm, no3_loss) %>%
   arrange(plot, date) -> loss
 
+
+# Original NO3-N LOSS  ==================================================
 # check that annual NO3-N loss are accurate
 loss %>% 
   group_by(plot, year) %>% 
@@ -131,16 +138,20 @@ loss %>%
   spread(key=plot, value=no3_loss)
 
 
-# check the first no3-n conc values each year and plot
-loss %>% 
-  group_by(plot, year) %>%
-  filter(row_number()==1) %>%
-  select(-c(date, flow_mm, no3_loss)) %>%
-  spread(key=plot, value=no3_int)
+loss %>%
+  select(-c(no3_con, no3_int, no3_loss)) %>%
+  spread(key=plot, value=flow_mm) -> loss_spread
+
+# # check the first no3-n conc values each year and plot
+# loss %>% 
+#   group_by(plot, year) %>%
+#   filter(row_number()==1) %>%
+#   select(-c(date, flow_mm, no3_loss)) %>%
+#   spread(key=plot, value=no3_int)
 
 
 
-
+# INTERPOLATIONS =========================================================
 # # INTERPOLATE NO3-N by date =====
 # loss %>% 
 #   group_by(plot) %>%
@@ -170,27 +181,31 @@ loss %>%
   group_by(plot, year) %>%
   mutate(no3_int_NEW = na.approx(no3_con, date, na.rm = F)) %>% 
   mutate(no3_int_NEW = na.locf(no3_int_NEW, na.rm = F)) %>%
-  mutate(no3_int_NEW = na.locf(no3_int_NEW, na.rm = F, fromLast = TRUE)) -> loss
+  mutate(no3_int_NEW = na.locf(no3_int_NEW, na.rm = F, fromLast = TRUE)) -> loss_NEW
 
 
 # interpolate tile flow if gap is <= 10
-loss %>%
+loss_NEW %>%
   group_by(plot, year) %>%
   mutate(flow_mm_NEW = na.approx(flow_mm, date, na.rm = FALSE, maxgap = 10)) %>% 
-  mutate(loss = flow_mm_NEW * 10000 * no3_int_NEW / 10^6) -> loss
+  mutate(loss = flow_mm_NEW * 10000 * no3_int_NEW / 10^6) -> loss_NEW
   
 
 
-loss %>%
+loss_NEW %>%
   group_by(plot, year) %>%
-  summarize_at(vars(matches("loss")), sum, na.rm = TRUE) -> SERF_NO3_Loss_Summary
+  summarize_at(vars(matches("loss")), sum, na.rm = TRUE) %>%
+  #gather(variable, value, no3_loss:loss) %>%
+  #unite(temp, plot, year) %>%
+  #spread(key=temp, value=value)
+  ungroup() -> SERF_NO3_Loss_Summary
 
 
 
 
 
 
-save(loss, 
+save(loss_NEW, 
      file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/no3_loss_with_NO3_interp.Rda")
 
 write.csv(loss, 
