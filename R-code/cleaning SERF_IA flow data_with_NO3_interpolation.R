@@ -28,8 +28,7 @@ bind_rows(p1, p2, p3, p4, p5, p6) %>%
   mutate(Time = format.Date(Time, "%H:%M")) %>% 
   mutate(timestamp = parse_date_time(paste(paste(Year, Month, Day, sep = "-"), Time), "ymd HM")) -> loss
 
-save(loss, 
-     file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/loss.Rda")
+#save(loss, file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/loss.Rda")
 load(file = "C:/Users/Gio/Documents/GitHub/CSCAP/Sustainable_Corn_Paper/Data/flow/SERF/loss.Rda")
 
 
@@ -152,6 +151,26 @@ loss %>%
 
 
 # INTERPOLATIONS =========================================================
+
+# extrapolate data
+a <- data.frame(x=1:10, y=c(1,NA,10,3,4,NA,NA,12,NA,2))
+a$count = ifelse(is.na(a$y), 1, 0)
+#a$diff = c(0, diff(a$count))
+rbind.data.frame(rle(a$count)) -> tempo
+tempo$lengths[tempo$values==1] <- tempo$lengths[tempo$values==1] + 1
+tempo$lengths[tempo$values==0] <- tempo$lengths[tempo$values==0] - 1
+tempo$cum = cumsum(tempo$lengths) +1
+a$n <- NA
+a[tempo$cum[tempo$values==1], ]$n <- tempo$lengths[tempo$values==1]
+a$newvalue = a$y/a$n
+a[is.na(a$y) | !is.na(a$n), ] %>%
+  na.locf.default(newvalue, fromLast = T, na.rm = F) %>%
+  select(newvalue) -> a[is.na(a$y) | !is.na(a$n), "newvalue"]
+a$newvalue[is.na(a$newvalue)] <- a$y[is.na(a$newvalue)]
+a
+
+
+
 # # INTERPOLATE NO3-N by date =====
 # loss %>% 
 #   group_by(plot) %>%
